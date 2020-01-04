@@ -10,6 +10,8 @@ public class Controller2D : MonoBehaviour
     public int horizontalRaycount = 4;
     public int verticalRaycount = 4;
 
+    float maxClimbAngle = 80;
+
     float horizontalRaySpacing;
     float verticalRaySpacing;
 
@@ -21,14 +23,15 @@ public class Controller2D : MonoBehaviour
     void Start()
     {
         collider = GetComponent<BoxCollider2D>();
-        CalculateRaySpacing();
+        CalculateRaySpacing();                  // Calculate the RaySpacing when game start
     }
 
     // move the player
     public void Move(Vector3 velocity)
     {
-        UpdateRaycastOrigins();
-        collisionInfo.Reset();
+        UpdateRaycastOrigins();                 // everytime we move the player Update the RayCastOrigins struct
+
+        collisionInfo.Reset();                  // everytime we move the player reset the Collision struct
 
         if (velocity.x != 0)
         {
@@ -43,8 +46,7 @@ public class Controller2D : MonoBehaviour
         transform.Translate(velocity);
     }
 
-    // define horizontal collision
-    void HorizontalCollisions(ref Vector3 velocity)
+    void HorizontalCollisions(ref Vector3 velocity)                 // define horizontal collision
     {
         float directionX = Mathf.Sign(velocity.x);
         float rayLength = Mathf.Abs(velocity.x) + skinWidth;
@@ -59,18 +61,37 @@ public class Controller2D : MonoBehaviour
 
             if (hit)
             {
-                velocity.x = (hit.distance - skinWidth) * directionX;
-                // update the raylength
-                rayLength = hit.distance;
+                float slopeAngle = Vector2.Angle(hit.normal, Vector2.up);
+                
+                if (i == 0 && slopeAngle < maxClimbAngle)
+                {
+                    float distanceToSlopeStart = 0;
+                    if (slopeAngle != collisionInfo.slopeAngleOld)              // everytime we encounter a new slope
+                    {
+                        distanceToSlopeStart = hit.distance - skinWidth;
+                        velocity.x -= distanceToSlopeStart * directionX;
+                    }
+                    ClimbSlope(ref velocity, slopeAngle);                       // Climbing the Slope
+                    velocity.x += distanceToSlopeStart * directionX;            // resetting the velocity in X direction
+                }
 
-                collisionInfo.left = directionX == -1;
-                collisionInfo.right = directionX == 1;
+                if (!collisionInfo.climbingSlope || slopeAngle > maxClimbAngle) {
+                    velocity.x = (hit.distance - skinWidth) * directionX;
+                    rayLength = hit.distance;                           // update the raylength
+
+                    if (collisionInfo.climbingSlope)
+                    {
+                        velocity.y = Mathf.Tan(collisionInfo.slopeAngle * Mathf.Deg2Rad) * Mathf.Abs(velocity.x);
+                    }
+
+                    collisionInfo.left = directionX == -1;
+                    collisionInfo.right = directionX == 1;
+                }
             }
         }
     }
 
-    // define vertical collision
-    void VerticalCollisions(ref Vector3 velocity)
+    void VerticalCollisions(ref Vector3 velocity)                   // define vertical collision
     {
         float directionY = Mathf.Sign(velocity.y);
         float rayLength = Mathf.Abs(velocity.y) + skinWidth;
@@ -86,8 +107,8 @@ public class Controller2D : MonoBehaviour
             if (hit)
             {
                 velocity.y = (hit.distance - skinWidth) * directionY;
-                // update the raylength
-                rayLength = hit.distance;
+                
+                rayLength = hit.distance;                           // update the raylength
 
                 collisionInfo.above = directionY == 1;
                 collisionInfo.below = directionY == -1;
@@ -95,8 +116,22 @@ public class Controller2D : MonoBehaviour
         }
     }
 
-    // update raycast origins
-    void UpdateRaycastOrigins()
+    void ClimbSlope(ref Vector3 velocity, float slopeAngle)
+    {
+        float moveDistance = Mathf.Abs(velocity.x);
+        float climbVelocityY = Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * moveDistance;
+
+        if (velocity.y <= climbVelocityY)
+        {
+            velocity.y = climbVelocityY;
+            velocity.x = Mathf.Cos(slopeAngle * Mathf.Deg2Rad) * moveDistance * Mathf.Sign(velocity.x);
+            collisionInfo.below = true;
+            collisionInfo.climbingSlope = true;
+        }
+    }
+
+    
+    void UpdateRaycastOrigins()                                 // update raycast origins   
     {
         Bounds bounds = collider.bounds;
         bounds.Expand(skinWidth * -2);
@@ -107,8 +142,8 @@ public class Controller2D : MonoBehaviour
         raycastOrigins.topRight= new Vector2(bounds.max.x, bounds.max.y);
     }
 
-    // calculate space between rays
-    void CalculateRaySpacing()
+    
+    void CalculateRaySpacing()                                  // calculate space between rays
     {
         Bounds bounds = collider.bounds;
         bounds.Expand(skinWidth * -2);
@@ -131,10 +166,17 @@ public class Controller2D : MonoBehaviour
         public bool above, below;
         public bool left, right;
 
+        public bool climbingSlope;
+        public float slopeAngle, slopeAngleOld;
+
         public void Reset()
         {
             above = below = false;
             left = right = false;
+            climbingSlope = false;
+
+            slopeAngleOld = slopeAngle;
+            slopeAngle = 0;
         }
     }
 
