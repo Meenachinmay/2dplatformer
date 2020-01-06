@@ -107,8 +107,12 @@ public class Controller2D : MonoBehaviour
             if (hit)
             {
                 velocity.y = (hit.distance - skinWidth) * directionY;
-                
                 rayLength = hit.distance;                           // update the raylength
+
+                if (collisionInfo.climbingSlope)
+                {
+                    velocity.x = velocity.y / Mathf.Tan(collisionInfo.slopeAngle * Mathf.Deg2Rad) * Mathf.Sign(velocity.x);
+                }
 
                 collisionInfo.above = directionY == 1;
                 collisionInfo.below = directionY == -1;
